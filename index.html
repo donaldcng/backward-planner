@@ -1,16 +1,66 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Backward Project Planner</title>
-    <link rel="stylesheet" href="styles.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>Backward Project Planner</title>
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-    <div id="app">
-        <h1>Backward Project Planner</h1>
-        <p>Plan your project by working backward from your deadline!</p>
-    </div>
-    <script src="script.js"></script>
+  <div id="app">
+    <!-- Sidebar Settings -->
+    <aside id="sidebar">
+      <h2>Settings</h2>
+      <label for="date-format">Date Format:</label>
+      <select id="date-format">
+        <option value="yyyy-MM-dd" selected>YYYY-MM-DD</option>
+        <option value="MM/dd/yyyy">MM/DD/YYYY</option>
+        <option value="dd MMM yyyy">DD MMM YYYY</option>
+      </select>
+    </aside>
+
+    <!-- Main Content -->
+    <main id="main-content">
+      <h1>Backward Project Planner</h1>
+
+      <!-- Deadline Input Section -->
+      <div id="deadline-section">
+        <label for="deadline">Project Deadline:</label>
+        <input type="date" id="deadline" />
+        <button id="set-deadline">Set Deadline</button>
+      </div>
+
+      <!-- Display Selected Deadline -->
+      <div id="deadline-display"></div>
+
+      <!-- Task Input Section -->
+      <div id="task-section" style="display:none;">
+        <h2>Add Task</h2>
+        <label for="task-name">Task Name:</label>
+        <input type="text" id="task-name" placeholder="e.g. Design UI" />
+        <label for="task-duration">Duration (days):</label>
+        <input type="number" id="task-duration" min="1" placeholder="e.g. 3" />
+        <button id="add-task">Add Task</button>
+      </div>
+
+      <!-- Plan Table -->
+      <div id="tasks-list">
+        <table id="plan-table" style="display:none;">
+          <thead>
+            <tr>
+              <th>Task</th>
+              <th>Start Date</th>
+              <th>End Date</th>
+              <th>Duration (days)</th>
+            </tr>
+          </thead>
+          <tbody id="plan-body"></tbody>
+        </table>
+        <p id="no-tasks-msg">Please set a deadline and add tasks.</p>
+      </div>
+    </main>
+  </div>
+
+  <script src="script.js"></script>
 </body>
 </html>
