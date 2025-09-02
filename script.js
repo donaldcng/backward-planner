@@ -1,97 +1,205 @@
 // script.js
 
-const appState = {
+// ─── State ─────────────────────────────────────────────────────────────────────
+const state = {
   deadline: null,
   tasks: [],
   dateFormat: 'yyyy-MM-dd',
-  excludeHolidays: true,
+  skipHolidays: true,
   holidays: [],
-  enabledHolidays: new Set()
+  holidaySet: new Set()
 };
 
-const elems = {
-  tabBtns: document.querySelectorAll('.tab-btn'),
+// ─── Element References ─────────────────────────────────────────────────────────
+const refs = {
+  // Tabs
+  tabButtons: document.querySelectorAll('.tab-btn'),
   tabContents: document.querySelectorAll('.tab-content'),
+
+  // Settings
   dateFormatSelect: document.getElementById('date-format'),
-  excludeHolidaysCheckbox: document.getElementById('exclude-holidays'),
-  holidayItems: document.getElementById('holiday-items'),
+  skipHolidaysCheckbox: document.getElementById('exclude-holidays'),
+  holidayContainer: document.getElementById('holiday-items'),
+
+  // Deadline
   deadlineInput: document.getElementById('deadline'),
   setDeadlineBtn: document.getElementById('set-deadline'),
   deadlineDisplay: document.getElementById('deadline-display'),
+
+  // Tasks
   taskSection: document.getElementById('task-section'),
   taskNameInput: document.getElementById('task-name'),
   taskDurationInput: document.getElementById('task-duration'),
   addTaskBtn: document.getElementById('add-task'),
+
+  // Plan Table
   planTable: document.getElementById('plan-table'),
   planBody: document.getElementById('plan-body'),
   noTasksMsg: document.getElementById('no-tasks-msg')
 };
 
-// Load and parse holidays
+// ─── Initialization ────────────────────────────────────────────────────────────
+initApp();
+
+async function initApp() {
+  bindEventListeners();
+  await loadHolidays();
+  renderHolidays();
+  renderTasks();
+}
+
+// ─── Event Binding ─────────────────────────────────────────────────────────────
+function bindEventListeners() {
+  refs.tabButtons.forEach(btn => btn.addEventListener('click', handleTabSwitch));
+  refs.dateFormatSelect.addEventListener('change', handleFormatChange);
+  refs.skipHolidaysCheckbox.addEventListener('change', handleSkipHolidaysToggle);
+  refs.setDeadlineBtn.addEventListener('click', handleSetDeadline);
+  refs.addTaskBtn.addEventListener('click', handleAddTask);
+}
+
+// ─── Event Handlers ────────────────────────────────────────────────────────────
+function handleTabSwitch(e) {
+  const target = e.currentTarget.dataset.tab;
+  refs.tabButtons.forEach(b => b.classList.toggle('active', b === e.currentTarget));
+  refs.tabContents.forEach(c => c.classList.toggle('active', c.id === `${target}-tab`));
+}
+
+function handleFormatChange() {
+  state.dateFormat = refs.dateFormatSelect.value;
+  updateDeadlineDisplay();
+  renderHolidays();
+  renderTasks();
+}
+
+function handleSkipHolidaysToggle() {
+  state.skipHolidays = refs.skipHolidaysCheckbox.checked;
+  calculateDatesForAllTasks();
+  renderTasks();
+}
+
+function handleSetDeadline() {
+  const date = refs.deadlineInput.valueAsDate;
+  if (!date) return alert('Please pick a valid date.');
+  state.deadline = normalizeDate(date);
+  calculateDatesForAllTasks();
+  updateDeadlineDisplay();
+  refs.taskSection.style.display = 'block';
+  renderTasks();
+}
+
+function handleAddTask() {
+  const name = refs.taskNameInput.value.trim();
+  const duration = parseInt(refs.taskDurationInput.value, 10);
+  if (!name || isNaN(duration) || duration < 1) {
+    return alert('Enter valid task name and duration.');
+  }
+  state.tasks.push({ name, duration });
+  refs.taskNameInput.value = '';
+  refs.taskDurationInput.value = '';
+  calculateDatesForAllTasks();
+  renderTasks();
+}
+
+// ─── Holidays Logic ────────────────────────────────────────────────────────────
 async function loadHolidays() {
   const resp = await fetch('/holidays.json');
-  const data = await resp.json();
-  const events = data.vcalendar[0].vevent;
-  appState.holidays = events.map(e => {
-    const d = e.dtstart[0];
-    return {
-      date: new Date(+d.slice(0,4), +d.slice(4,6)-1, +d.slice(6,8)),
-      summary: e.summary
-    };
-  });
-  appState.holidays.forEach(h => appState.enabledHolidays.add(h.date.getTime()));
-  renderHolidays(); // Display holidays after loading
+  const { vcalendar } = await resp.json();
+  state.holidays = vcalendar[0].vevent.map(e => parseHoliday(e));
+  state.holidays.forEach(h => state.holidaySet.add(+h.date));
 }
 
-// Render holidays list for reference
+function parseHoliday(event) {
+  const raw = event.dtstart[0];
+  const date = new Date(+raw.slice(0,4), +raw.slice(4,6)-1, +raw.slice(6,8));
+  return { date: normalizeDate(date), summary: event.summary };
+}
+
 function renderHolidays() {
-  elems.holidayItems.innerHTML = '';
-  if (!appState.holidays.length) {
-    elems.holidayItems.textContent = 'No holidays loaded.';
-    return;
-  }
-  
-  appState.holidays.forEach(h => {
+  refs.holidayContainer.innerHTML = '';
+  state.holidays.forEach(({ date, summary }) => {
     const div = document.createElement('div');
     div.className = 'holiday-item';
-    
-    const dateSpan = document.createElement('span');
-    dateSpan.className = 'holiday-date';
-    dateSpan.textContent = formatDate(h.date);
-    
-    const summarySpan = document.createElement('span');
-    summarySpan.textContent = h.summary;
-    
-    div.appendChild(dateSpan);
-    div.appendChild(summarySpan);
-    elems.holidayItems.appendChild(div);
+    div.innerHTML = `<span class="holiday-date">${formatDate(date)}</span> ${summary}`;
+    refs.holidayContainer.appendChild(div);
   });
 }
 
-// Check if holiday should be excluded
-function isHoliday(date) {
-  return appState.excludeHolidays && appState.enabledHolidays.has(date.getTime());
-}
+// ─── Date Calculation ──────────────────────────────────────────────────────────
+function calculateDatesForAllTasks() {
+  if (!state.deadline) return;
+  let cursor = getLastWorkingDay(state.deadline);
 
-// Skip weekends and excluded holidays
-function skipNonWorkingDays(date) {
-  const d = new Date(date);
-  while (d.getDay() === 0 || d.getDay() === 6 || isHoliday(d)) {
-    d.setDate(d.getDate() - 1);
+  for (let i = state.tasks.length - 1; i >= 0; i--) {
+    const task = state.tasks[i];
+    task.endDate = new Date(cursor);
+    task.startDate = findStartDate(cursor, task.duration);
+    cursor = getLastWorkingDay(addDays(task.startDate, -1));
   }
-  return d;
 }
 
-// Format date
+function getLastWorkingDay(date) {
+  let d = new Date(date);
+  while (isWeekend(d) || isExcludedHoliday(d)) {
+    d = addDays(d, -1);
+  }
+  return normalizeDate(d);
+}
+
+function findStartDate(endDate, duration) {
+  let daysLeft = duration;
+  let d = new Date(endDate);
+  while (daysLeft > 0) {
+    d = addDays(d, -1);
+    if (!isWeekend(d) && !isExcludedHoliday(d)) daysLeft--;
+  }
+  return normalizeDate(d);
+}
+
+function isWeekend(date) {
+  const day = date.getDay();
+  return day === 0 || day === 6;
+}
+
+function isExcludedHoliday(date) {
+  return state.skipHolidays && state.holidaySet.has(+normalizeDate(date));
+}
+
+// ─── Rendering Tasks ──────────────────────────────────────────────────────────
+function renderTasks() {
+  toggleVisibility(refs.planTable, state.tasks.length > 0 && state.deadline);
+  refs.noTasksMsg.textContent = state.deadline
+    ? state.tasks.length ? '' : 'No tasks added yet.'
+    : 'Please set a deadline first.';
+  toggleVisibility(refs.noTasksMsg, !state.tasks.length || !state.deadline);
+
+  if (state.tasks.length && state.deadline) {
+    refs.planBody.innerHTML = '';
+    state.tasks.forEach(t => refs.planBody.appendChild(createTaskRow(t)));
+  }
+}
+
+function createTaskRow({ name, startDate, endDate, duration }) {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td>${name}</td>
+    <td>${formatDate(startDate)}</td>
+    <td>${getWeekday(startDate)}</td>
+    <td>${formatDate(endDate)}</td>
+    <td>${getWeekday(endDate)}</td>
+    <td>${duration}</td>
+  `;
+  return tr;
+}
+
+// ─── Utility Functions ────────────────────────────────────────────────────────
 function formatDate(date) {
-  const yyyy = date.getFullYear();
-  const MM = String(date.getMonth() + 1).padStart(2, '0');
-  const dd = String(date.getDate()).padStart(2, '0');
-  const MMM = date.toLocaleString(undefined, { month: 'short' });
-  switch (appState.dateFormat) {
-    case 'MM/dd/yyyy': return `${MM}/${dd}/${yyyy}`;
-    case 'dd MMM yyyy': return `${dd} ${MMM} ${yyyy}`;
-    default: return `${yyyy}-${MM}-${dd}`;
+  const y = date.getFullYear();
+  const m = String(date.getMonth()+1).padStart(2,'0');
+  const d = String(date.getDate()).padStart(2,'0');
+  switch (state.dateFormat) {
+    case 'MM/dd/yyyy': return `${m}/${d}/${y}`;
+    case 'dd MMM yyyy': return `${d} ${date.toLocaleString(undefined,{month:'short'})} ${y}`;
+    default: return `${y}-${m}-${d}`;
   }
 }
 
@@ -99,116 +207,21 @@ function getWeekday(date) {
   return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][date.getDay()];
 }
 
+function addDays(date, n) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + n);
+  return d;
+}
 
-// Update displayed deadline
+function normalizeDate(date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function toggleVisibility(elem, show) {
+  elem.style.display = show ? '' : 'none';
+}
+
 function updateDeadlineDisplay() {
-  if (!appState.deadline) return;
-  elems.deadlineDisplay.textContent = 'Deadline: ' + formatDate(appState.deadline);
+  refs.deadlineDisplay.textContent =
+    state.deadline ? 'Deadline: ' + formatDate(state.deadline) : '';
 }
-
-// Calculate task dates
-function calculateTaskDates() {
-  if (!appState.deadline) return;
-  let currentEnd = skipNonWorkingDays(appState.deadline);
-  for (let i = appState.tasks.length - 1; i >= 0; i--) {
-    const t = appState.tasks[i];
-    t.endDate = new Date(currentEnd);
-    let daysRemaining = t.duration;
-    let cursor = new Date(currentEnd);
-    while (daysRemaining > 0) {
-      cursor.setDate(cursor.getDate() - 1);
-      if (cursor.getDay() !== 0 && cursor.getDay() !== 6 && !isHoliday(cursor)) {
-        daysRemaining--;
-      }
-    }
-    t.startDate = skipNonWorkingDays(cursor);
-    const prev = new Date(t.startDate);
-    prev.setDate(prev.getDate() - 1);
-    currentEnd = skipNonWorkingDays(prev);
-  }
-}
-
-// Render tasks
-function renderTasks() {
-  elems.planTable.style.display = 'none';
-  elems.noTasksMsg.style.display = 'none';
-
-  if (!appState.deadline) {
-    elems.noTasksMsg.textContent = 'Please set a deadline first.';
-    elems.noTasksMsg.style.display = 'block';
-    return;
-  }
-  if (!appState.tasks.length) {
-    elems.noTasksMsg.textContent = 'No tasks added yet.';
-    elems.noTasksMsg.style.display = 'block';
-    return;
-  }
-
-  elems.planBody.innerHTML = '';
-  appState.tasks.forEach(t => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${t.name}</td>
-      <td>${formatDate(t.startDate)}</td>
-      <td>${getWeekday(t.startDate)}</td>
-      <td>${formatDate(t.endDate)}</td>
-      <td>${getWeekday(t.endDate)}</td>
-      <td>${t.duration}</td>
-    `;
-    elems.planBody.appendChild(tr);
-  });
-  elems.planTable.style.display = 'table';
-}
-
-
-// Event handlers
-elems.tabBtns.forEach(btn => {
-  btn.addEventListener('click', () => {
-    elems.tabBtns.forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    elems.tabContents.forEach(c => c.classList.remove('active'));
-    document.getElementById(btn.dataset.tab + '-tab').classList.add('active');
-  });
-});
-
-elems.dateFormatSelect.addEventListener('change', () => {
-  appState.dateFormat = elems.dateFormatSelect.value;
-  updateDeadlineDisplay();
-  renderTasks();
-  renderHolidays(); // Re-render holidays with new date format
-});
-
-elems.excludeHolidaysCheckbox.addEventListener('change', () => {
-  appState.excludeHolidays = elems.excludeHolidaysCheckbox.checked;
-  calculateTaskDates();
-  renderTasks();
-});
-
-elems.setDeadlineBtn.addEventListener('click', () => {
-  const dt = elems.deadlineInput.valueAsDate;
-  if (!dt) return alert('Pick a valid date.');
-  appState.deadline = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
-  calculateTaskDates();
-  updateDeadlineDisplay();
-  elems.taskSection.style.display = 'block';
-  renderTasks();
-});
-
-elems.addTaskBtn.addEventListener('click', () => {
-  const name = elems.taskNameInput.value.trim();
-  const dur = parseInt(elems.taskDurationInput.value, 10);
-  if (!name || isNaN(dur) || dur < 1) {
-    return alert('Enter valid task & duration.');
-  }
-  appState.tasks.push({ name, duration: dur });
-  elems.taskNameInput.value = '';
-  elems.taskDurationInput.value = '';
-  calculateTaskDates();
-  renderTasks();
-});
-
-// Initialize
-(async function init() {
-  await loadHolidays();
-  renderTasks();
-})();
