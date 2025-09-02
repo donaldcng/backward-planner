@@ -102,7 +102,7 @@ function handleAddTask() {
 
 // ─── Holidays Logic ────────────────────────────────────────────────────────────
 async function loadHolidays() {
-  const resp = await fetch('/holidays.json');
+  const resp = await fetch('holidays.json');
   const { vcalendar } = await resp.json();
   state.holidays = vcalendar[0].vevent.map(e => parseHoliday(e));
   state.holidays.forEach(h => state.holidaySet.add(+h.date));
