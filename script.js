@@ -124,18 +124,31 @@ function renderHolidays() {
   });
 }
 
-// ─── Date Calculation ──────────────────────────────────────────────────────────
+// ─── Date Calculation (FIXED FOR PROPER DEPENDENT TASKS) ──────────────────────
 function calculateDatesForAllTasks() {
-  if (!state.deadline) return;
-  let cursor = getLastWorkingDay(state.deadline);
+  if (!state.deadline || state.tasks.length === 0) return;
+  
+  // Start from the deadline and work backwards
+  let currentEndDate = getLastWorkingDay(state.deadline);
 
+  // Process tasks in reverse order (last task first)
   for (let i = state.tasks.length - 1; i >= 0; i--) {
     const task = state.tasks[i];
-    task.endDate = new Date(cursor);
-    task.startDate = findStartDate(cursor, task.duration);
-    cursor = getLastWorkingDay(addDays(task.startDate, -1));
+    
+    // Set the task's end date
+    task.endDate = new Date(currentEndDate);
+    
+    // Calculate start date by counting backwards
+    task.startDate = findStartDate(currentEndDate, task.duration);
+    
+    // For dependent tasks: next task ends exactly when current task starts
+    // (no gap between tasks)
+    if (i > 0) {
+      currentEndDate = new Date(task.startDate);
+    }
   }
 }
+
 
 function getLastWorkingDay(date) {
   let d = new Date(date);
