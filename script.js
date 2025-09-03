@@ -26,6 +26,11 @@ const refs = {
   setDeadlineBtn: document.getElementById('set-deadline'),
   deadlineDisplay: document.getElementById('deadline-display'),
 
+  // Import/Export
+  exportBtn: document.getElementById('export-btn'),
+  importBtn: document.getElementById('import-btn'),
+  importFile: document.getElementById('import-file'),
+
   // Tasks
   taskSection: document.getElementById('task-section'),
   taskNameInput: document.getElementById('task-name'),
@@ -55,6 +60,9 @@ function bindEventListeners() {
   refs.skipHolidaysCheckbox.addEventListener('change', handleSkipHolidaysToggle);
   refs.setDeadlineBtn.addEventListener('click', handleSetDeadline);
   refs.addTaskBtn.addEventListener('click', handleAddTask);
+  refs.exportBtn.addEventListener('click', handleExportPlan);
+  refs.importBtn.addEventListener('click', handleImportClick);
+  refs.importFile.addEventListener('change', handleImportFile);
 }
 
 // ─── Event Handlers ────────────────────────────────────────────────────────────
@@ -100,6 +108,103 @@ function handleAddTask() {
   renderTasks();
 }
 
+// ─── Import/Export Functions ──────────────────────────────────────────────────
+function handleExportPlan() {
+  const planData = {
+    deadline: state.deadline,
+    tasks: state.tasks,
+    dateFormat: state.dateFormat,
+    skipHolidays: state.skipHolidays,
+    exportDate: new Date().toISOString(),
+    version: "1.0"
+  };
+  
+  const jsonString = JSON.stringify(planData, null, 2);
+  const blob = new Blob([jsonString], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `project-plan-${formatDateForFilename(new Date())}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function handleImportClick() {
+  refs.importFile.click();
+}
+
+function handleImportFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  
+  const reader = new FileReader();
+  reader.onload = function(event) {
+    try {
+      const planData = JSON.parse(event.target.result);
+      importPlan(planData);
+    } catch (error) {
+      alert('Error reading file: Invalid JSON format');
+      console.error('Import error:', error);
+    }
+  };
+  reader.readAsText(file);
+  
+  // Clear the file input
+  e.target.value = '';
+}
+
+function importPlan(planData) {
+  // Validate the imported data
+  if (!planData || typeof planData !== 'object') {
+    alert('Invalid plan file format');
+    return;
+  }
+  
+  try {
+    // Import deadline
+    if (planData.deadline) {
+      state.deadline = new Date(planData.deadline);
+      refs.deadlineInput.valueAsDate = state.deadline;
+      updateDeadlineDisplay();
+      refs.taskSection.style.display = 'block';
+    }
+    
+    // Import tasks
+    if (Array.isArray(planData.tasks)) {
+      state.tasks = planData.tasks.map(task => ({
+        name: task.name || 'Unnamed Task',
+        duration: parseInt(task.duration) || 1,
+        startDate: task.startDate ? new Date(task.startDate) : null,
+        endDate: task.endDate ? new Date(task.endDate) : null
+      }));
+    }
+    
+    // Import settings
+    if (planData.dateFormat && ['yyyy-MM-dd', 'MM/dd/yyyy', 'dd MMM yyyy'].includes(planData.dateFormat)) {
+      state.dateFormat = planData.dateFormat;
+      refs.dateFormatSelect.value = planData.dateFormat;
+    }
+    
+    if (typeof planData.skipHolidays === 'boolean') {
+      state.skipHolidays = planData.skipHolidays;
+      refs.skipHolidaysCheckbox.checked = planData.skipHolidays;
+    }
+    
+    // Recalculate dates and re-render
+    calculateDatesForAllTasks();
+    renderTasks();
+    
+    alert('Plan imported successfully!');
+    
+  } catch (error) {
+    alert('Error importing plan: ' + error.message);
+    console.error('Import error:', error);
+  }
+}
+
 // ─── Holidays Logic ────────────────────────────────────────────────────────────
 async function loadHolidays() {
   const resp = await fetch('holidays.json');
@@ -124,7 +229,7 @@ function renderHolidays() {
   });
 }
 
-// ─── Date Calculation (FIXED FOR PROPER DEPENDENT TASKS) ──────────────────────
+// ─── Date Calculation (DEPENDENT TASKS) ──────────────────────────────────────
 function calculateDatesForAllTasks() {
   if (!state.deadline || state.tasks.length === 0) return;
   
@@ -142,13 +247,11 @@ function calculateDatesForAllTasks() {
     task.startDate = findStartDate(currentEndDate, task.duration);
     
     // For dependent tasks: next task ends exactly when current task starts
-    // (no gap between tasks)
     if (i > 0) {
       currentEndDate = new Date(task.startDate);
     }
   }
 }
-
 
 function getLastWorkingDay(date) {
   let d = new Date(date);
@@ -237,4 +340,12 @@ function toggleVisibility(elem, show) {
 function updateDeadlineDisplay() {
   refs.deadlineDisplay.textContent =
     state.deadline ? 'Deadline: ' + formatDate(state.deadline) : '';
+}
+
+// Helper function for filename formatting
+function formatDateForFilename(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }

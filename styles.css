@@ -291,3 +291,25 @@ button:hover {
     padding: 0.4rem;
   }
 }
+
+#import-export-section {
+  margin: 15px 0;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background-color: #f9f9f9;
+}
+
+#import-export-section button {
+  margin-right: 10px;
+  padding: 8px 16px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+#import-export-section button:hover {
+  background-color: #0056b3;
+}
