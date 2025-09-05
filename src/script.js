@@ -1,4 +1,14 @@
-// script.js - FIXED VERSION
+// src/script.js
+import holidaysData from './holidays.json';
+// Exported initApp entrypoint
+export function initApp() {
+  bindEventListeners();
+  loadHolidays();
+  renderHolidays();
+  renderTasks();
+}
+
+// ─── State and DOM refs 
 
 // ─── State ─────────────────────────────────────────────────────────────────────
 const state = {
@@ -43,15 +53,6 @@ const refs = {
     noTasksMsg: document.getElementById('no-tasks-msg')
 };
 
-// ─── Initialization ────────────────────────────────────────────────────────────
-initApp();
-
-async function initApp() {
-    bindEventListeners();
-    await loadHolidays();
-    renderHolidays();
-    renderTasks();
-}
 
 // ─── Event Binding ─────────────────────────────────────────────────────────────
 function bindEventListeners() {
@@ -206,11 +207,14 @@ function importPlan(planData) {
 }
 
 // ─── Holidays Logic ────────────────────────────────────────────────────────────
-async function loadHolidays() {
-    const resp = await fetch('holidays.json');
-    const { vcalendar } = await resp.json();
-    state.holidays = vcalendar[0].vevent.map(e => parseHoliday(e));
-    state.holidays.forEach(h => state.holidaySet.add(+h.date));
+function loadHolidays() {
+  const vevents = holidaysData.vcalendar[0].vevent;
+  state.holidays = vevents.map(evt => {
+    const raw = evt.dtstart[0];
+    const d = new Date(+raw.slice(0,4), +raw.slice(4,6)-1, +raw.slice(6,8));
+    return { date: normalizeDate(d), summary: evt.summary };
+  });
+  state.holidays.forEach(h => state.holidaySet.add(+h.date));
 }
 
 function parseHoliday(event) {
