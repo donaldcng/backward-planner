@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Backward Project Planner</title>
+  <script type="module" crossorigin src="/backward-planner/assets/index-BByE9Opu.js"></script>
+  <link rel="stylesheet" crossorigin href="/backward-planner/assets/index-DM6pIwRg.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Sidebar Settings -->
+    <aside id="sidebar">
+      <h2>Settings</h2>
+      <div class="tab-nav">
+        <button class="tab-btn active" data-tab="format">Format</button>
+        <button class="tab-btn" data-tab="holidays">Holidays</button>
+      </div>
+      <div id="format-tab" class="tab-content active">
+        <label for="date-format">Date Format:</label>
+        <select id="date-format">
+          <option value="yyyy-MM-dd" selected>YYYY-MM-DD</option>
+          <option value="MM/dd/yyyy">MM/DD/YYYY</option>
+          <option value="dd MMM yyyy">DD MMM YYYY</option>
+        </select>
+      </div>
+      <div id="holidays-tab" class="tab-content">
+        <div class="holiday-settings">
+          <label title="If checked, tasks will skip public holidays">
+            <input type="checkbox" id="exclude-holidays" checked>
+            Skip Public Holidays
+          </label>
+        </div>
+        <div class="holiday-list">
+          <h4>Hong Kong Public Holidays</h4>
+          <div id="holiday-items">
+            <!-- Populated by JavaScript -->
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main id="main-content">
+      <h1>Backward Project Planner</h1>
+
+      <!-- Deadline Input Section -->
+      <div id="deadline-section">
+        <label for="deadline">Project Deadline:</label>
+        <input type="date" id="deadline" />
+        <button id="set-deadline">Set Deadline</button>
+      </div>
+
+      <!-- Display Selected Deadline -->
+      <div id="deadline-display"></div>
+
+      <!-- Import/Export Section -->
+      <div id="import-export-section">
+        <button id="export-btn">Export Plan</button>
+        <input type="file" id="import-file" accept=".json" style="display: none;">
+        <button id="import-btn">Import Plan</button>
+      </div>
+
+      <!-- Task Input Section -->
+      <div id="task-section" style="display:none;">
+        <h2>Add Task</h2>
+        <label for="task-name">Task Name:</label>
+        <input type="text" id="task-name" placeholder="e.g. Design UI" />
+        <label for="task-duration">Duration (days):</label>
+        <input type="number" id="task-duration" min="1" placeholder="e.g. 3" />
+        <button id="add-task">Add Task</button>
+      </div>
+
+      <!-- Plan Table -->
+      <div id="tasks-list">
+        <table id="plan-table" style="display:none;">
+          <thead>
+            <tr>
+              <th>Task</th>
+              <th>Start Date</th>
+              <th>Start Day</th>
+              <th>End Date</th>
+              <th>End Day</th>
+              <th>Duration (days)</th>
+            </tr>
+          </thead>
+          <tbody id="plan-body"></tbody>
+        </table>
+        <p id="no-tasks-msg">Please set a deadline and add tasks.</p>
+      </div>
+    </main>
+  </div>
+</body>
+</html>
